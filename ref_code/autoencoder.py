@@ -10,74 +10,75 @@ import matplotlib.pyplot as plt
 
 # Import MNIST data
 from tensorflow.examples.tutorials.mnist import input_data
-mnist = input_data.read_data_sets("/tmp/data/", one_hot=False)
+mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
 
 
 # Visualize decoder setting
 # Parameters
 learning_rate = 0.001
-training_epochs = 10
+training_epochs = 50
 batch_size = 100
 display_step = 1
 examples_to_show = 10
 latent_dim = 20
-
 # Network Parameters
 n_input = 784  # MNIST data input (img shape: 28*28)
+# hidden layer settings
+n_hidden_1 = 500 # 1st layer num features
+n_hidden_2 = 500 # 2nd layer num features
+
 
 # tf Graph input (only pictures)
-X = tf.placeholder("float", [None, n_input])
+X = tf.placeholder(tf.float32, [None, n_input])
 
-# hidden layer settings
-n_hidden_1 = 256 # 1st layer num features
-n_hidden_2 = 128 # 2nd layer num features
+def xavier_init(fan_in, fan_out, constant=1): 
+    """ Xavier initialization of network weights"""
+    # https://stackoverflow.com/questions/33640581/how-to-do-xavier-initialization-on-tensorflow
+    low = -constant*np.sqrt(6.0/(fan_in + fan_out)) 
+    high = constant*np.sqrt(6.0/(fan_in + fan_out))
+    return tf.random_uniform((fan_in, fan_out), 
+                             minval=low, maxval=high, 
+                             dtype=tf.float32)
 weights = dict()
 biases = dict()
 
 weights['encoder'] = {
-    'encoder_h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
-    'encoder_h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
-    'out_mean': tf.Variable(tf.random_normal([n_hidden_2, latent_dim])),
-    'out_log_sigma': tf.Variable(tf.random_normal([n_hidden_2, latent_dim])),
+    'encoder_h1': tf.Variable(xavier_init(n_input, n_hidden_1)),
+    'encoder_h2': tf.Variable(xavier_init(n_hidden_1, n_hidden_2)),
+    'out_mean': tf.Variable(xavier_init(n_hidden_2, latent_dim)),
+    'out_log_sigma': tf.Variable(xavier_init(n_hidden_2, latent_dim)),
 }
 biases['encoder'] = {
-    'encoder_b1': tf.Variable(tf.random_normal([n_hidden_1])),
-    'encoder_b2': tf.Variable(tf.random_normal([n_hidden_2])),
+    'encoder_b1': tf.Variable(tf.zeros([n_hidden_1], dtype=tf.float32)),
+    'encoder_b2': tf.Variable(tf.zeros([n_hidden_2], dtype=tf.float32)),
     'out_mean': tf.Variable(tf.zeros([latent_dim], dtype=tf.float32)),
     'out_log_sigma': tf.Variable(tf.zeros([latent_dim], dtype=tf.float32)),
 }
 
 weights['decoder'] = {
-	'decoder_h1': tf.Variable(tf.random_normal([latent_dim, n_hidden_1])),
-    'decoder_h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
-    'out_mean': tf.Variable(tf.random_normal([n_hidden_2, n_input])),
-    'out_log_sigma': tf.Variable(tf.random_normal([n_hidden_2, n_input])),
+    'decoder_h1': tf.Variable(xavier_init(latent_dim, n_hidden_1)),
+    'decoder_h2': tf.Variable(xavier_init(n_hidden_1, n_hidden_2)),
+    'out_mean': tf.Variable(xavier_init(n_hidden_2, n_input)),
+    'out_log_sigma': tf.Variable(xavier_init(n_hidden_2, n_input)),
 }
 biases['decoder'] = {
-    'decoder_b1': tf.Variable(tf.random_normal([n_hidden_1])),
-    'decoder_b2': tf.Variable(tf.random_normal([n_hidden_2])),
+    'decoder_b1': tf.Variable(tf.zeros([n_hidden_1], dtype=tf.float32)),
+    'decoder_b2': tf.Variable(tf.zeros([n_hidden_2], dtype=tf.float32)),
     'out_mean': tf.Variable(tf.zeros([n_input], dtype=tf.float32)),
     'out_log_sigma': tf.Variable(tf.zeros([n_input], dtype=tf.float32)),
 }
+
 # Building the encoder
 def encoder(x):
     # Encoder Hidden layer with sigmoid activation #1
-    # layer_1 = tf.nn.sigmoid(tf.add(tf.matmul(x, weights['encoder']['encoder_h1']),
-    #                                biases['encoder']['encoder_b1']))
-    # # Decoder Hidden layer with sigmoid activation #2
-    # layer_2 = tf.nn.sigmoid(tf.add(tf.matmul(layer_1, weights['encoder']['encoder_h2']),
-    #                                biases['encoder']['encoder_b2']))
     layer_1 = tf.nn.softplus(tf.add(tf.matmul(x, weights['encoder']['encoder_h1']),
                                    biases['encoder']['encoder_b1']))
     # Decoder Hidden layer with sigmoid activation #2
     layer_2 = tf.nn.softplus(tf.add(tf.matmul(layer_1, weights['encoder']['encoder_h2']),
                                    biases['encoder']['encoder_b2']))
 
-    z_mean = tf.add(tf.matmul(layer_2, weights['encoder']['out_mean']),
-                                   biases['encoder']['out_mean'])
-    z_log_sigma_sq = \
-        tf.add(tf.matmul(layer_2, weights['encoder']['out_log_sigma']),
-         biases['encoder']['out_log_sigma'])
+    z_mean = tf.add(tf.matmul(layer_2, weights['encoder']['out_mean']), biases['encoder']['out_mean'])
+    z_log_sigma_sq = tf.add(tf.matmul(layer_2, weights['encoder']['out_log_sigma']), biases['encoder']['out_log_sigma'])
 
     return (z_mean, z_log_sigma_sq)
 
@@ -85,23 +86,13 @@ def encoder(x):
 # Building the decoder
 def decoder(x):
     # Encoder Hidden layer with sigmoid activation #1
-    # layer_1 = tf.nn.sigmoid(tf.add(tf.matmul(x, weights['decoder']['decoder_h1']),
-    #                                biases['decoder']['decoder_b1']))
-    # # Decoder Hidden layer with sigmoid activation #2
-    # layer_2 = tf.nn.sigmoid(tf.add(tf.matmul(layer_1, weights['decoder']['decoder_h2']),
-    #                                biases['decoder']['decoder_b2']))
     layer_1 = tf.nn.softplus(tf.add(tf.matmul(x, weights['decoder']['decoder_h1']),
                                    biases['decoder']['decoder_b1']))
     # Decoder Hidden layer with sigmoid activation #2
     layer_2 = tf.nn.softplus(tf.add(tf.matmul(layer_1, weights['decoder']['decoder_h2']),
                                    biases['decoder']['decoder_b2']))
-    # z_mean = tf.add(tf.matmul(layer_2, weights['decoder']['out_mean']),
-    #                                biases['decoder']['out_mean'])
-    # z_log_sigma_sq = \
-    #     tf.add(tf.matmul(layer_2, weights['decoder']['out_log_sigma']),
-    #      biases['decoder']['out_log_sigma'])
-    x_reconstr_mean = tf.nn.sigmoid(tf.add(tf.matmul(layer_2, weights['decoder']['out_mean']),
-     biases['decoder']['out_mean']))
+
+    x_reconstr_mean = tf.nn.sigmoid(tf.add(tf.matmul(layer_2, weights['decoder']['out_mean']), biases['decoder']['out_mean']))
 
     return x_reconstr_mean
 
@@ -178,9 +169,8 @@ def decoder(x):
 # Construct model
 # encoder_op = encoder(X)
 z_mean, z_log_sigma_sq = encoder(X)
-eps = tf.random_normal((batch_size, latent_dim))
-z = tf.add(z_mean, tf.multiply(
-	tf.sqrt(tf.exp(z_log_sigma_sq)), eps))
+eps = tf.random_normal((batch_size, latent_dim), 0, 1, dtype=tf.float32)
+z = tf.add(z_mean, tf.multiply(tf.sqrt(tf.exp(z_log_sigma_sq)), eps))
 
 # decoder_op = decoder(encoder_op)
 decoder_op = decoder(z)
@@ -192,10 +182,10 @@ y_true = X
 
 # Define loss and optimizer, minimize the squared error
 # recon_cost = tf.reduce_mean(tf.pow(y_true - y_pred, 2))
+# latent_cost = 0
 recon_cost = -tf.reduce_sum(y_true * tf.log(1e-10 + y_pred)
                            + (1-y_true) * tf.log(1e-10 + 1 - y_pred), 1)
-latent_cost = -0.5 * tf.reduce_sum(1 + z_log_sigma_sq - tf.square(z_mean) - tf.exp(z_log_sigma_sq), axis=1)
-# latent_cost = 0
+latent_cost = -0.5 * tf.reduce_sum(1 + z_log_sigma_sq - tf.square(z_mean) - tf.exp(z_log_sigma_sq), 1)
 cost = tf.reduce_mean(recon_cost + latent_cost)
 optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost)
 
@@ -204,10 +194,7 @@ optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost)
 with tf.Session() as sess:
     # tf.initialize_all_variables() no long valid from
     # 2017-03-02 if using tensorflow >= 0.12
-    if int((tf.__version__).split('.')[1]) < 12 and int((tf.__version__).split('.')[0]) < 1:
-        init = tf.initialize_all_variables()
-    else:
-        init = tf.global_variables_initializer()
+    init = tf.global_variables_initializer()
     sess.run(init)
     total_batch = int(mnist.train.num_examples/batch_size)
     # Training cycle
