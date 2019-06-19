@@ -1,34 +1,24 @@
-# https://zhuanlan.zhihu.com/p/27865705
-# My tutorial website: https://morvanzhou.github.io/tutorials/
-
-from __future__ import division, print_function, absolute_import
-
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
+import pickle
 
-# Import MNIST data
-from tensorflow.examples.tutorials.mnist import input_data
-mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
+# ref
+# https://zhuanlan.zhihu.com/p/27865705
 
+with open('data.pickle','rb') as f:
+    X_train, noisy_X, y_train = pickle.load(f)
 
-# Visualize decoder setting
-# Parameters
-learning_rate = 0.001
-training_epochs = 50
+learning_rate = 0.0005 # 0.0001
+training_epochs = 20
 batch_size = 100
 display_step = 1
-examples_to_show = 10
 latent_dim = 20
-# Network Parameters
 n_input = 784  # MNIST data input (img shape: 28*28)
-# hidden layer settings
 n_hidden_1 = 500 # 1st layer num features
 n_hidden_2 = 500 # 2nd layer num features
 
 
-# tf Graph input (only pictures)
-X = tf.placeholder(tf.float32, [None, n_input])
 
 def xavier_init(fan_in, fan_out, constant=1): 
     """ Xavier initialization of network weights"""
@@ -38,6 +28,8 @@ def xavier_init(fan_in, fan_out, constant=1):
     return tf.random_uniform((fan_in, fan_out), 
                              minval=low, maxval=high, 
                              dtype=tf.float32)
+
+
 weights = dict()
 biases = dict()
 
@@ -67,12 +59,10 @@ biases['decoder'] = {
     'out_log_sigma': tf.Variable(tf.zeros([n_input], dtype=tf.float32)),
 }
 
-# Building the encoder
+
 def encoder(x):
-    # Encoder Hidden layer with sigmoid activation #1
     layer_1 = tf.nn.softplus(tf.add(tf.matmul(x, weights['encoder']['encoder_h1']),
                                    biases['encoder']['encoder_b1']))
-    # Decoder Hidden layer with sigmoid activation #2
     layer_2 = tf.nn.softplus(tf.add(tf.matmul(layer_1, weights['encoder']['encoder_h2']),
                                    biases['encoder']['encoder_b2']))
 
@@ -82,12 +72,9 @@ def encoder(x):
     return (z_mean, z_log_sigma_sq)
 
 
-# Building the decoder
 def decoder(x):
-    # Encoder Hidden layer with sigmoid activation #1
     layer_1 = tf.nn.softplus(tf.add(tf.matmul(x, weights['decoder']['decoder_h1']),
                                    biases['decoder']['decoder_b1']))
-    # Decoder Hidden layer with sigmoid activation #2
     layer_2 = tf.nn.softplus(tf.add(tf.matmul(layer_1, weights['decoder']['decoder_h2']),
                                    biases['decoder']['decoder_b2']))
 
@@ -96,132 +83,104 @@ def decoder(x):
     return x_reconstr_mean
 
 
-"""
-
-# Visualize encoder setting
-# Parameters
-learning_rate = 0.01    # 0.01 this learning rate will be better! Tested
-training_epochs = 10
-batch_size = 256
-display_step = 1
-
-# Network Parameters
-n_input = 784  # MNIST data input (img shape: 28*28)
-
-# tf Graph input (only pictures)
-X = tf.placeholder("float", [None, n_input])
-
-# hidden layer settings
-n_hidden_1 = 128
-n_hidden_2 = 64
-n_hidden_3 = 10
-n_hidden_4 = 2
-
-weights = {
-    'encoder_h1': tf.Variable(tf.truncated_normal([n_input, n_hidden_1],)),
-    'encoder_h2': tf.Variable(tf.truncated_normal([n_hidden_1, n_hidden_2],)),
-    'encoder_h3': tf.Variable(tf.truncated_normal([n_hidden_2, n_hidden_3],)),
-    'encoder_h4': tf.Variable(tf.truncated_normal([n_hidden_3, n_hidden_4],)),
-
-    'decoder_h1': tf.Variable(tf.truncated_normal([n_hidden_4, n_hidden_3],)),
-    'decoder_h2': tf.Variable(tf.truncated_normal([n_hidden_3, n_hidden_2],)),
-    'decoder_h3': tf.Variable(tf.truncated_normal([n_hidden_2, n_hidden_1],)),
-    'decoder_h4': tf.Variable(tf.truncated_normal([n_hidden_1, n_input],)),
-}
-biases = {
-    'encoder_b1': tf.Variable(tf.random_normal([n_hidden_1])),
-    'encoder_b2': tf.Variable(tf.random_normal([n_hidden_2])),
-    'encoder_b3': tf.Variable(tf.random_normal([n_hidden_3])),
-    'encoder_b4': tf.Variable(tf.random_normal([n_hidden_4])),
-
-    'decoder_b1': tf.Variable(tf.random_normal([n_hidden_3])),
-    'decoder_b2': tf.Variable(tf.random_normal([n_hidden_2])),
-    'decoder_b3': tf.Variable(tf.random_normal([n_hidden_1])),
-    'decoder_b4': tf.Variable(tf.random_normal([n_input])),
-}
-
-
-def encoder(x):
-    layer_1 = tf.nn.sigmoid(tf.add(tf.matmul(x, weights['encoder_h1']),
-                                   biases['encoder_b1']))
-    layer_2 = tf.nn.sigmoid(tf.add(tf.matmul(layer_1, weights['encoder_h2']),
-                                   biases['encoder_b2']))
-    layer_3 = tf.nn.sigmoid(tf.add(tf.matmul(layer_2, weights['encoder_h3']),
-                                   biases['encoder_b3']))
-    layer_4 = tf.add(tf.matmul(layer_3, weights['encoder_h4']),
-                                    biases['encoder_b4'])
-    return layer_4
-
-
-def decoder(x):
-    layer_1 = tf.nn.sigmoid(tf.add(tf.matmul(x, weights['decoder_h1']),
-                                   biases['decoder_b1']))
-    layer_2 = tf.nn.sigmoid(tf.add(tf.matmul(layer_1, weights['decoder_h2']),
-                                   biases['decoder_b2']))
-    layer_3 = tf.nn.sigmoid(tf.add(tf.matmul(layer_2, weights['decoder_h3']),
-                                biases['decoder_b3']))
-    layer_4 = tf.nn.sigmoid(tf.add(tf.matmul(layer_3, weights['decoder_h4']),
-                                biases['decoder_b4']))
-    return layer_4
-"""
-
-# Construct model
-# encoder_op = encoder(X)
+X = tf.placeholder(tf.float32, [None, n_input])
 z_mean, z_log_sigma_sq = encoder(X)
 eps = tf.random_normal((batch_size, latent_dim), 0, 1, dtype=tf.float32)
 z = tf.add(z_mean, tf.multiply(tf.sqrt(tf.exp(z_log_sigma_sq)), eps))
 
+z0 = z[0, :]
+z1 = z[1, :]
+zn = []
+lmbd = np.linspace(0.0, 1.0, num=batch_size)
+for n in range(batch_size):
+    pp = lmbd[n]
+    re = (1-pp) * z0 + pp * z1
+    zn.append(re)
+
+zn = tf.stack(zn)
+
 # decoder_op = decoder(encoder_op)
 decoder_op = decoder(z)
 
-# Prediction
+# Result from convex combination
+decode_latent = decoder(zn)
+
+# Result from N(0, 1)
+sample_output = decoder(eps)
+
 y_pred = decoder_op
-# Targets (Labels) are the input data.
 y_true = X
 
-# Define loss and optimizer, minimize the squared error
-# recon_cost = tf.reduce_mean(tf.pow(y_true - y_pred, 2))
-# latent_cost = 0
+
+regularizer = tf.contrib.layers.l2_regularizer(scale=0.01)
+reg_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+reg_cost = tf.contrib.layers.apply_regularization(regularizer, reg_variables)
+
 recon_cost = -tf.reduce_sum(y_true * tf.log(1e-10 + y_pred)
                            + (1-y_true) * tf.log(1e-10 + 1 - y_pred), 1)
 latent_cost = -0.5 * tf.reduce_sum(1 + z_log_sigma_sq - tf.square(z_mean) - tf.exp(z_log_sigma_sq), 1)
-cost = tf.reduce_mean(recon_cost + latent_cost)
-optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost)
+cost = tf.reduce_mean(recon_cost + latent_cost + reg_cost)
+
+train_op = tf.train.AdamOptimizer(learning_rate).minimize(cost)
+cost_hist = []
+
+def next_batch(data1, data2, labels, batch_size=100):
+    idx = np.arange(0, data1.shape[0])
+    np.random.shuffle(idx)
+    idx = idx[:batch_size]
+    data1_shuffle = [data1[i] for i in idx]
+    data2_shuffle = [data2[i] for i in idx]
+    labels_shuffle = [labels[i] for i in idx]
+    return np.asarray(data1_shuffle), np.asarray(data2_shuffle), np.asarray(labels_shuffle)
 
 
-# Launch the graph
 with tf.Session() as sess:
-    # tf.initialize_all_variables() no long valid from
-    # 2017-03-02 if using tensorflow >= 0.12
+
     init = tf.global_variables_initializer()
     sess.run(init)
-    total_batch = int(mnist.train.num_examples/batch_size)
-    # Training cycle
+    total_batch = int(y_train.shape[0]/batch_size)
+    
     for epoch in range(training_epochs):
-        # Loop over all batches
+        batch_cost = []
         for i in range(total_batch):
-            batch_xs, batch_ys = mnist.train.next_batch(batch_size)  # max(x) = 1, min(x) = 0
-            # Run optimization op (backprop) and cost op (to get loss value)
-            _, c = sess.run([optimizer, cost], feed_dict={X: batch_xs})
-        # Display logs per epoch step
+            batch_xs, batch_noisy, batch_ys = next_batch(X_train, noisy_X, y_train)  # max(x) = 1, min(x) = 0
+            _, c = sess.run([train_op, cost], feed_dict={X: batch_noisy})
+            batch_cost.append(c)
+        
+        cost_hist.append(-np.mean(batch_cost)/batch_size/784)
         if epoch % display_step == 0:
             print("Epoch:", '%04d' % (epoch+1),
                   "cost=", "{:.9f}".format(c))
 
-    print("Optimization Finished!")
 
-    # # Applying encode and decode over test set
-    encode_decode = sess.run(
-        y_pred, feed_dict={X: mnist.test.images[:batch_size]})
-    # Compare original images with their reconstructions
-    f, a = plt.subplots(2, 10, figsize=(10, 2))
-    # print(encode_decode)
-    for i in range(examples_to_show):
-        a[0][i].imshow(np.reshape(mnist.test.images[i], (28, 28)), cmap='gray')
-        a[1][i].imshow(np.reshape(encode_decode[i], (28, 28)), cmap='gray')
-    plt.show()
+    plt.clf()
+    plt.plot(cost_hist, label='train')
+    plt.xlabel('epoch')
+    plt.ylabel('lower bound')
+    plt.title('Learning curve')
+    plt.legend()
+    plt.savefig('learning_curve.jpg')
 
-    # encoder_result = sess.run(encoder_op, feed_dict={X: mnist.test.images})
-    # plt.scatter(encoder_result[:, 0], encoder_result[:, 1], c=mnist.test.labels)
-    # plt.colorbar()
+
+    original, noisy, _ = next_batch(X_train, noisy_X, y_train)
+    encode_decode, sp, lt = sess.run(
+        [y_pred, sample_output, decode_latent], feed_dict={X: original})
+
+    f, a = plt.subplots(3, 4)
+    for i in range(4):
+        a[0][i].imshow(np.reshape(original[i], (28, 28)).transpose(), cmap='gray')
+        a[1][i].imshow(np.reshape(noisy[i], (28, 28)).transpose(), cmap='gray')
+        a[2][i].imshow(np.reshape(encode_decode[i], (28, 28)).transpose(), cmap='gray')
+    plt.savefig('reconstruct.jpg')
+
+
+    f, b = plt.subplots(5, 10, figsize=(10, 5))
+    for i in range(5):
+        for j in range(10):
+            b[i][j].imshow(np.reshape(sp[5*i+j], (28, 28)).transpose(), cmap='gray')
+    plt.savefig('sample.jpg')
+
+    # f, a = plt.subplots(1, 25, figsize=(25, 1))
+    # for i in range(25):
+    #     a[i].imshow(np.reshape(lt[i * 4], (28, 28)), cmap='gray')
     # plt.show()
