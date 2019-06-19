@@ -5,18 +5,21 @@ import pickle
 
 # ref
 # https://zhuanlan.zhihu.com/p/27865705
+# https://zhuanlan.zhihu.com/p/34998569
 
 with open('data.pickle','rb') as f:
     X_train, noisy_X, y_train = pickle.load(f)
 
-learning_rate = 0.0005 # 0.0001
-training_epochs = 20
-batch_size = 100
+learning_rate = 0.0005
+training_epochs = 30
+batch_size = 400
 display_step = 1
-latent_dim = 20
-n_input = 784  # MNIST data input (img shape: 28*28)
+latent_dim = 100 # 100
+n_input = 784
 n_hidden_1 = 500 # 1st layer num features
-n_hidden_2 = 500 # 2nd layer num features
+n_hidden_2 = 250 # 2nd layer num features
+weights = dict()
+biases = dict()
 
 
 
@@ -28,10 +31,6 @@ def xavier_init(fan_in, fan_out, constant=1):
     return tf.random_uniform((fan_in, fan_out), 
                              minval=low, maxval=high, 
                              dtype=tf.float32)
-
-
-weights = dict()
-biases = dict()
 
 weights['encoder'] = {
     'encoder_h1': tf.Variable(xavier_init(n_input, n_hidden_1)),
@@ -82,27 +81,26 @@ def decoder(x):
 
     return x_reconstr_mean
 
+def bilinear_interpolate(d0, d1, d2, d3, grid=20):
+    zn = []
+    for i in range(grid):
+        for j in range(grid):
+            newd = ( i * j * d3 + (grid-1-i) * j * d1 + i * (grid-1-j) * d2 + (grid-1-i) * (grid-1-j) * d0 ) / (grid-1)**2
+            zn.append(newd)
+    return tf.stack(zn)
+
 
 X = tf.placeholder(tf.float32, [None, n_input])
 z_mean, z_log_sigma_sq = encoder(X)
 eps = tf.random_normal((batch_size, latent_dim), 0, 1, dtype=tf.float32)
 z = tf.add(z_mean, tf.multiply(tf.sqrt(tf.exp(z_log_sigma_sq)), eps))
 
-z0 = z[0, :]
-z1 = z[1, :]
-zn = []
-lmbd = np.linspace(0.0, 1.0, num=batch_size)
-for n in range(batch_size):
-    pp = lmbd[n]
-    re = (1-pp) * z0 + pp * z1
-    zn.append(re)
+zn = bilinear_interpolate(z[0, :], z[1, :], z[2, :], z[3, :])
 
-zn = tf.stack(zn)
-
-# decoder_op = decoder(encoder_op)
+# Result from encoder
 decoder_op = decoder(z)
 
-# Result from convex combination
+# Result from bilinear interpolation
 decode_latent = decoder(zn)
 
 # Result from N(0, 1)
@@ -111,8 +109,7 @@ sample_output = decoder(eps)
 y_pred = decoder_op
 y_true = X
 
-
-regularizer = tf.contrib.layers.l2_regularizer(scale=0.01)
+regularizer = tf.contrib.layers.l2_regularizer(scale=0.001)
 reg_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
 reg_cost = tf.contrib.layers.apply_regularization(regularizer, reg_variables)
 
@@ -124,7 +121,7 @@ cost = tf.reduce_mean(recon_cost + latent_cost + reg_cost)
 train_op = tf.train.AdamOptimizer(learning_rate).minimize(cost)
 cost_hist = []
 
-def next_batch(data1, data2, labels, batch_size=100):
+def next_batch(data1, data2, labels, batch_size):
     idx = np.arange(0, data1.shape[0])
     np.random.shuffle(idx)
     idx = idx[:batch_size]
@@ -143,8 +140,8 @@ with tf.Session() as sess:
     for epoch in range(training_epochs):
         batch_cost = []
         for i in range(total_batch):
-            batch_xs, batch_noisy, batch_ys = next_batch(X_train, noisy_X, y_train)  # max(x) = 1, min(x) = 0
-            _, c = sess.run([train_op, cost], feed_dict={X: batch_noisy})
+            batch_xs, batch_noisy, batch_ys = next_batch(X_train, noisy_X, y_train, batch_size)
+            _, c = sess.run([train_op, cost], feed_dict={X: batch_xs})
             batch_cost.append(c)
         
         cost_hist.append(-np.mean(batch_cost)/batch_size/784)
@@ -162,7 +159,7 @@ with tf.Session() as sess:
     plt.savefig('learning_curve.jpg')
 
 
-    original, noisy, _ = next_batch(X_train, noisy_X, y_train)
+    original, noisy, _ = next_batch(X_train, noisy_X, y_train, batch_size)
     encode_decode, sp, lt = sess.run(
         [y_pred, sample_output, decode_latent], feed_dict={X: original})
 
@@ -180,7 +177,13 @@ with tf.Session() as sess:
             b[i][j].imshow(np.reshape(sp[5*i+j], (28, 28)).transpose(), cmap='gray')
     plt.savefig('sample.jpg')
 
-    # f, a = plt.subplots(1, 25, figsize=(25, 1))
-    # for i in range(25):
-    #     a[i].imshow(np.reshape(lt[i * 4], (28, 28)), cmap='gray')
-    # plt.show()
+    
+    plt.clf()
+    big_latent = []
+    for i in range(20):
+        col_image = []
+        for j in range(20):
+            col_image.append(np.reshape(lt[20*i+j], (28, 28)).transpose())
+        big_latent.append(np.hstack(col_image))
+    plt.imshow(np.vstack(big_latent), cmap='gray')
+    plt.savefig('latent_space.jpg')
