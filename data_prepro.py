@@ -16,13 +16,13 @@ X = arr[:, 1:] / 255
 y_trim = []
 X_trim = []
 for i in range(y.shape[0]):
-	if y[i] > 10:
+	if y[i] >= 10 and y[i] <= 35: 
 		y_trim.append(y[i])
 		X_trim.append(X[i, :])
 y_trim = np.array(y_trim)
-# print(y_trim.shape) # (86399, )
+# print(y_trim.shape) # (62400, )
 X_trim = np.stack(X_trim, axis=0)
-# print(X_trim.shape) # (86399, 784)
+# print(X_trim.shape) # (62400, 784)
 noisy_X = X_trim + np.random.normal(0,0.25,X_trim.shape)
 
 col = 5

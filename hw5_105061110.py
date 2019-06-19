@@ -179,11 +179,13 @@ with tf.Session() as sess:
 
     
     plt.clf()
+    plt.figure(figsize=(10,10))
     big_latent = []
     for i in range(20):
         col_image = []
         for j in range(20):
             col_image.append(np.reshape(lt[20*i+j], (28, 28)).transpose())
         big_latent.append(np.hstack(col_image))
-    plt.imshow(np.vstack(big_latent), cmap='gray')
+    big_latent = np.vstack(big_latent)
+    plt.imshow(big_latent, cmap='gray')
     plt.savefig('latent_space.jpg')
